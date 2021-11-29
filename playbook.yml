@@ -1,0 +1,10 @@
+---
+- name: Set up Gitlab runner
+  hosts: all
+  remote_user: "{{ debian_username }}"
+  become: true
+  become_method: sudo
+
+  roles:
+    - docker
+#    - gitlab-runner
