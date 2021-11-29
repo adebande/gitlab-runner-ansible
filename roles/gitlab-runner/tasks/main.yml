@@ -1,0 +1,54 @@
+- name: add gitlab host to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{  gitlab_server_ip  }} {{  gitlab_server_hostname  }}"
+    insertafter: EOF
+
+- name: get server certificate
+  shell: |
+    mkdir -p /etc/gitlab-runner/certs
+    openssl s_client -connect {{  gitlab_server_hostname  }}:443 -showcerts </dev/null 2>/dev/null | sed -e '/-----BEGIN/,/-----END/!d' | sudo tee "/etc/gitlab-runner/certs/{{  gitlab_server_hostname  }}.crt" >/dev/null
+#todo : check if crt already exists
+
+- name: check packages
+  package_facts:
+    manager: "apt"
+
+- name: get gitlab repository installation script
+  get_url:
+    url: https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh
+    dest: /tmp/gitlab-runner.script.deb.sh
+    mode: 0744
+  when: "'gitlab-runner' not in ansible_facts.packages"
+
+- name: add gitlab repository
+  command: bash /tmp/gitlab-runner.script.deb.sh
+  when: "'gitlab-runner' not in ansible_facts.packages"
+
+- name: install gitlab runner
+  apt:
+    name: gitlab-runner
+    state: present
+
+- name: check if docker runner is already registered
+  lineinfile: 
+    dest: /etc/gitlab-runner/config.toml
+    line: name = "shared-docker-runner"
+  check_mode: yes
+  register: presence
+#todo: fix presence check
+
+- name: register docker runner
+  shell: |
+    gitlab-runner register \
+    --non-interactive \
+    --url "https://{{ gitlab_server_hostname }}" \
+    --registration-token "{{ registration_token }}" \
+    --executor "docker" \
+    --docker-image alpine:latest \
+    --description "shared-docker-runner" \
+    --tag-list "docker,alpine" \
+    --run-untagged="true" \
+    --locked="false" \
+    --tls-ca-file="/etc/gitlab-runner/certs/{{  gitlab_server_hostname  }}.crt"
+  when: presence.changed

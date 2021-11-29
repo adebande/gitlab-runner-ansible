@@ -1,1 +1,4 @@
 debian_username: user
+gitlab_server_ip: 192.168.1.1
+gitlab_server_hostname: gitlab.example.com
+registration_token: ""
